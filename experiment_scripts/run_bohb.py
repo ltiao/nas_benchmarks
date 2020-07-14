@@ -13,11 +13,10 @@ from hpbandster.core.worker import Worker
 
 from tabular_benchmarks import FCNetProteinStructureBenchmark, FCNetSliceLocalizationBenchmark, \
     FCNetNavalPropulsionBenchmark, FCNetParkinsonsTelemonitoringBenchmark
-from tabular_benchmarks import NASCifar10A, NASCifar10B, NASCifar10C
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--run_id', default=0, type=int, nargs='?', help='unique number to identify this run')
-parser.add_argument('--benchmark', default="nas_cifar10a", type=str, nargs='?', help='specifies the benchmark')
+parser.add_argument('--benchmark', default="protein_structure", type=str, nargs='?', help='specifies the benchmark')
 parser.add_argument('--n_iters', default=100, type=int, nargs='?', help='number of iterations for optimization method')
 parser.add_argument('--output_path', default="./", type=str, nargs='?',
                     help='specifies the path where the results will be saved')
@@ -32,22 +31,7 @@ parser.add_argument('--bandwidth_factor', default=3, type=int, nargs='?', help='
 
 args = parser.parse_args()
 
-if args.benchmark == "nas_cifar10a":
-    min_budget = 4
-    max_budget = 108
-    b = NASCifar10A(data_dir=args.data_dir)
-
-elif args.benchmark == "nas_cifar10b":
-    b = NASCifar10B(data_dir=args.data_dir)
-    min_budget = 4
-    max_budget = 108
-
-elif args.benchmark == "nas_cifar10c":
-    b = NASCifar10C(data_dir=args.data_dir)
-    min_budget = 4
-    max_budget = 108
-
-elif args.benchmark == "protein_structure":
+if args.benchmark == "protein_structure":
     b = FCNetProteinStructureBenchmark(data_dir=args.data_dir)
     min_budget = 3
     max_budget = 100
@@ -70,24 +54,18 @@ elif args.benchmark == "parkinsons_telemonitoring":
 output_path = os.path.join(args.output_path, "bohb")
 os.makedirs(os.path.join(output_path), exist_ok=True)
 
-if args.benchmark == "protein_structure" or \
-        args.benchmark == "slice_localization" or args.benchmark == "naval_propulsion" \
-        or args.benchmark == "parkinsons_telemonitoring":
-    cs = ConfigSpace.ConfigurationSpace()
+cs = ConfigSpace.ConfigurationSpace()
 
-    cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("n_units_1", lower=0, upper=5))
-    cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("n_units_2", lower=0, upper=5))
-    cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("dropout_1", lower=0, upper=2))
-    cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("dropout_2", lower=0, upper=2))
-    cs.add_hyperparameter(ConfigSpace.CategoricalHyperparameter("activation_fn_1", ["tanh", "relu"]))
-    cs.add_hyperparameter(ConfigSpace.CategoricalHyperparameter("activation_fn_2", ["tanh", "relu"]))
-    cs.add_hyperparameter(
-        ConfigSpace.UniformIntegerHyperparameter("init_lr", lower=0, upper=5))
-    cs.add_hyperparameter(ConfigSpace.CategoricalHyperparameter("lr_schedule", ["cosine", "const"]))
-    cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("batch_size", lower=0, upper=3))
-else:
-    cs = b.get_configuration_space()
-
+cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("n_units_1", lower=0, upper=5))
+cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("n_units_2", lower=0, upper=5))
+cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("dropout_1", lower=0, upper=2))
+cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("dropout_2", lower=0, upper=2))
+cs.add_hyperparameter(ConfigSpace.CategoricalHyperparameter("activation_fn_1", ["tanh", "relu"]))
+cs.add_hyperparameter(ConfigSpace.CategoricalHyperparameter("activation_fn_2", ["tanh", "relu"]))
+cs.add_hyperparameter(
+    ConfigSpace.UniformIntegerHyperparameter("init_lr", lower=0, upper=5))
+cs.add_hyperparameter(ConfigSpace.CategoricalHyperparameter("lr_schedule", ["cosine", "const"]))
+cs.add_hyperparameter(ConfigSpace.UniformIntegerHyperparameter("batch_size", lower=0, upper=3))
 
 class MyWorker(Worker):
     def compute(self, config, budget, **kwargs):
@@ -136,7 +114,7 @@ bohb = BOHB(configspace=cs,
             eta=3, min_budget=min_budget, max_budget=max_budget,
             nameserver=ns_host,
             nameserver_port=ns_port,
-            optimization_strategy=args.strategy, num_samples=args.num_samples,
+            num_samples=args.num_samples,
             random_fraction=args.random_fraction, bandwidth_factor=args.bandwidth_factor,
             ping_interval=10, min_bandwidth=args.min_bandwidth)
 
@@ -145,10 +123,7 @@ results = bohb.run(args.n_iters, min_n_workers=num_workers)
 bohb.shutdown(shutdown_workers=True)
 NS.shutdown()
 
-if args.benchmark == "nas_cifar10a" or args.benchmark == "nas_cifar10b" or args.benchmark == "nas_cifar10c":
-    res = b.get_results(ignore_invalid_configs=True)
-else:
-    res = b.get_results()
+res = b.get_results()
 
 fh = open(os.path.join(output_path, 'run_%d.json' % args.run_id), 'w')
 json.dump(res, fh)
